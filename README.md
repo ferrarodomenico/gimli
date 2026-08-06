@@ -1,14 +1,29 @@
-# Gimli
+# Gimli 🛡️
 
-Email worker that consumes mail tasks from RabbitMQ, applies template parsing and HTML/CSS minification, and sends via SMTP — with exponential backoff retries and dead-letter queue support.
+**Gimli** is a high-performance, resilient Go mail-dispatching microservice designed to consume email tasks from RabbitMQ, perform efficient template parsing and HTML/CSS minification, and reliably deliver them via SMTP. 
+
+Engineered for **memory stability**, **strict resilience**, and **high configurability**, Gimli handles high-throughput pipelines gracefully without memory spikes.
+
+---
+
+## Key Features
+
+- **Concurrent SMTP Connection Pooling:** Reuses persistent, pre-dialed SMTP connections to maximize throughput and eliminate TCP handshake overhead.
+- **Robust Queue Management:** Integrated RabbitMQ consumer featuring exponential backoff retries and Dead-Letter Queue (DLQ) support for unrecoverable failures.
+- **In-Flight Minification & Parsing:** Zero-allocation pattern matching for template variables (`{{key}}`) paired with production-safe HTML/CSS minification.
+- **Constant Memory Footprint:** Bounded worker pools and prefetch limits ensure a flat, predictable memory profile even under massive loads.
+
+---
 
 ## Prerequisites
 
 - Go 1.26+
 - RabbitMQ
-- SMTP server
+- An SMTP server (or a local dev tool like Mailpit)
 
-## Setup
+---
+
+## Setup & Configuration
 
 Copy `.env.example` to `.env` and fill in your configuration:
 
@@ -28,46 +43,13 @@ DLQ_NAME=gimli-dlq
 DLQ_EXCHANGE=gimli-dlq
 DLQ_ROUTING_KEY=email.dead
 
-WORKER_COUNT=4
-PREFETCH_COUNT=8
+WORKER_COUNT=1000
+PREFETCH_COUNT=10000
 RECONNECT_DELAY=5
 
 SMTP_HOST=localhost
-SMTP_PORT=587
+SMTP_PORT=1025
 SMTP_USERNAME=
 SMTP_PASSWORD=
-SMTP_ALLOW_TLS=true
-SMTP_POOL_SIZE=4
-```
-
-## Build & Run
-
-```sh
-make build
-make run
-```
-
-Or manually:
-
-```sh
-go build -o bin/gimli cmd/main/main.go
-./bin/gimli
-```
-
-## Load Testing
-
-```sh
-make lt
-```
-
-## Architecture
-
-```
-cmd/main/main.go    → entry point
-internal/
-  config/           → env loading & config types
-  mail/             → SMTP client pool, template parsing, minification
-  queue/            → RabbitMQ consumer with retry/DLQ logic
-```
-
-Messages are JSON-encoded `Mail` structs consumed from the main queue. On failure they are re-published with exponential backoff; after max retries they land in the dead-letter queue.
+SMTP_ALLOW_TLS=false
+SMTP_POOL_SIZE=50
