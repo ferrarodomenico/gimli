@@ -52,6 +52,7 @@ func loadSMTP() SMTPConfig {
 		Password: loadEnv[string](SMTP_PASSWORD_ENV),
 		AllowTLS: loadEnv[bool](SMTP_ALLOW_TLS_ENV),
 		PoolSize: loadEnv[int](SMTP_POOL_SIZE_ENV),
+		Timeout:  loadEnv[uint8](SMTP_TIMEOUT_ENV),
 	}
 }
 

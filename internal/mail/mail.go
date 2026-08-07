@@ -12,6 +12,8 @@ import (
 	minhtml "github.com/tdewolff/minify/v2/html"
 	gomail "github.com/wneessen/go-mail"
 
+	"errors"
+
 	"github.com/ferrarodomenico/gimli/internal/config"
 )
 
@@ -29,6 +31,7 @@ type Mail struct {
 type Service struct {
 	m    *min.M
 	pool chan *gomail.Client
+	cfg  config.SMTPConfig
 }
 
 var (
@@ -39,18 +42,17 @@ var (
 func NewService(cfg config.SMTPConfig) *Service {
 	once.Do(func() {
 		m := min.New()
-
 		m.Add("text/html", &minhtml.Minifier{
 			KeepConditionalComments: true,
 			KeepDefaultAttrVals:     true,
 			KeepEndTags:             true,
 			KeepQuotes:              true,
 		})
-
 		m.Add("text/css", &mincss.Minifier{})
 
 		opts := []gomail.Option{
 			gomail.WithPort(cfg.Port),
+			gomail.WithTimeout(time.Duration(cfg.Timeout) * time.Second),
 		}
 		if !cfg.AllowTLS {
 			opts = append(opts, gomail.WithTLSPolicy(gomail.NoTLS))
@@ -63,23 +65,22 @@ func NewService(cfg config.SMTPConfig) *Service {
 
 		pool := make(chan *gomail.Client, cfg.PoolSize)
 		for i := 0; i < cfg.PoolSize; i++ {
-			sender, err := gomail.NewClient(cfg.Host, opts...)
+			client, err := gomail.NewClient(cfg.Host, opts...)
 			if err != nil {
 				panic(fmt.Sprintf("create smtp client %d: %v", i, err))
 			}
-			pool <- sender
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if err := client.DialWithContext(ctx); err != nil {
+				cancel()
+				panic(fmt.Sprintf("smtp connection %d test: %v", i, err))
+			}
+			cancel()
+
+			pool <- client
 		}
 
-		first := <-pool
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := first.DialWithContext(ctx); err != nil {
-			panic(fmt.Sprintf("smtp connection test: %v", err))
-		}
-		first.Close()
-		pool <- first
-
-		instance = &Service{m: m, pool: pool}
+		instance = &Service{m: m, pool: pool, cfg: cfg}
 	})
 	return instance
 }
@@ -153,8 +154,34 @@ func (s *Service) Send(mail *Mail) error {
 	}
 	msg.Subject(mail.Subject)
 	msg.SetBodyString(gomail.TypeTextHTML, mail.Body)
+
 	client := <-s.pool
-	err := client.DialAndSend(msg)
+	err := client.Send(msg)
+
+	if err != nil && !s.IsSendErrorTemp(err) {
+		if redialErr := s.redial(client); redialErr == nil {
+			err = client.Send(msg)
+		}
+	}
+
 	s.pool <- client
 	return err
+}
+
+func (s *Service) redial(client *gomail.Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = client.Close() // no-op if already closed
+	return client.DialWithContext(ctx)
+}
+
+func (s *Service) IsSendErrorTemp(err error) bool {
+	if err == nil {
+		return false
+	}
+	var sendErr *gomail.SendError
+	if errors.As(err, &sendErr) {
+		return sendErr.IsTemp()
+	}
+	return false
 }

@@ -8,6 +8,7 @@ const (
 	SMTP_PASSWORD_ENV  = "SMTP_PASSWORD"
 	SMTP_ALLOW_TLS_ENV = "SMTP_ALLOW_TLS"
 	SMTP_POOL_SIZE_ENV = "SMTP_POOL_SIZE"
+	SMTP_TIMEOUT_ENV   = "SMTP_TIMEOUT"
 )
 
 type SMTPConfig struct {
@@ -17,4 +18,5 @@ type SMTPConfig struct {
 	Password string
 	AllowTLS bool
 	PoolSize int
+	Timeout  uint8 // Timeout in seconds
 }

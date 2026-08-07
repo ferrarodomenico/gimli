@@ -18,6 +18,7 @@ func main() {
 	}
 
 	cfg := config.LoadConfig()
+	log.Printf("Loaded configuration: %+v", cfg)
 
 	consumer, err := queue.NewConsumer(cfg)
 	if err != nil {

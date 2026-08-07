@@ -187,7 +187,7 @@ func (c *Consumer) worker(id int, tasks <-chan amqp.Delivery) {
 
 		if err := c.processMail(&m); err != nil {
 			logger.Error().Err(err).Msg("Send failed")
-			c.handleFailure(&m, msg, logger)
+			c.handleFailure(&m, msg, logger, err)
 			continue
 		}
 
@@ -219,7 +219,7 @@ func (c *Consumer) monitorConnection(closeChan <-chan *amqp.Error, workerCount i
 			continue
 		}
 
-		if qosErr := ch.Qos(c.cfg.WorkerCount, 0, false); qosErr != nil {
+		if qosErr := ch.Qos(c.cfg.PrefetchCount, 0, false); qosErr != nil {
 			ch.Close()
 			conn.Close()
 			continue
@@ -243,11 +243,19 @@ func (c *Consumer) processMail(m *mail.Mail) error {
 	return c.mailService.Send(m)
 }
 
-func (c *Consumer) handleFailure(m *mail.Mail, msg amqp.Delivery, logger zerolog.Logger) {
+func (c *Consumer) handleFailure(m *mail.Mail, msg amqp.Delivery, logger zerolog.Logger, err error) {
+	if c.mailService.IsSendErrorTemp(err) {
+		c.publishMsg(c.cfg.DLQ.Exchange, c.cfg.DLQ.RoutingKey, m, "", amqp.Table{"x-retryable": false})
+		logger.Warn().Msg("Permanent SMTP failure, dead-lettered immediately")
+		_ = msg.Ack(false)
+		return
+	}
+
 	m.RetryCount++
 
 	if m.RetryCount > c.cfg.MainQueue.MaxRetries {
-		c.publishMsg(c.cfg.DLQ.Exchange, c.cfg.DLQ.RoutingKey, m, "")
+		retryableHeaders := amqp.Table{"x-retryable": true}
+		c.publishMsg(c.cfg.DLQ.Exchange, c.cfg.DLQ.RoutingKey, m, "", retryableHeaders)
 		logger.Warn().Int("retry", m.RetryCount).Msg("Dead-lettered")
 		_ = msg.Ack(false)
 		return
@@ -259,12 +267,13 @@ func (c *Consumer) handleFailure(m *mail.Mail, msg amqp.Delivery, logger zerolog
 		c.cfg.MainQueue.RoutingKey,
 		m,
 		strconv.Itoa(delay),
+		nil,
 	)
 	logger.Warn().Int("retry", m.RetryCount).Int("delay_ms", delay).Msg("Requeued for retry")
 	_ = msg.Ack(false)
 }
 
-func (c *Consumer) publishMsg(exchange, routingKey string, m *mail.Mail, expiration string) {
+func (c *Consumer) publishMsg(exchange, routingKey string, m *mail.Mail, expiration string, headers amqp.Table) {
 	body, _ := json.Marshal(m)
 	_ = c.channel.Publish(
 		exchange,
@@ -275,6 +284,7 @@ func (c *Consumer) publishMsg(exchange, routingKey string, m *mail.Mail, expirat
 			ContentType: "application/json",
 			Body:        body,
 			Expiration:  expiration,
+			Headers:     headers,
 		},
 	)
 }
