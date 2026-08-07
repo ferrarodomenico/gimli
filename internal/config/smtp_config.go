@@ -1,6 +1,8 @@
 // internal/config/smtp_config.go
 package config
 
+import "fmt"
+
 const (
 	SMTP_HOST_ENV      = "SMTP_HOST"
 	SMTP_PORT_ENV      = "SMTP_PORT"
@@ -11,6 +13,7 @@ const (
 	SMTP_TIMEOUT_ENV   = "SMTP_TIMEOUT"
 )
 
+// SMTPConfig holds connection parameters for the SMTP mail server.
 type SMTPConfig struct {
 	Host     string
 	Port     int
@@ -19,4 +22,14 @@ type SMTPConfig struct {
 	AllowTLS bool
 	PoolSize int
 	Timeout  uint8 // Timeout in seconds
+}
+
+// String returns a log-safe representation of the SMTP config with the password masked.
+func (c SMTPConfig) String() string {
+	masked := "***"
+	if c.Password == "" {
+		masked = "(empty)"
+	}
+	return fmt.Sprintf("SMTPConfig{Host:%q Port:%d Username:%q Password:%s AllowTLS:%v PoolSize:%d Timeout:%d}",
+		c.Host, c.Port, c.Username, masked, c.AllowTLS, c.PoolSize, c.Timeout)
 }

@@ -1,3 +1,5 @@
+// Loadtest publishes synthetic mail payloads into RabbitMQ to measure
+// throughput of the Gimli worker pipeline under concurrency.
 package main
 
 import (

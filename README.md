@@ -28,28 +28,28 @@ Engineered for **memory stability**, **strict resilience**, and **high configura
 Copy `.env.example` to `.env` and fill in your configuration:
 
 ```env
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+RABBITMQ_URL=amqp://user:password@localhost:5672/
+WORKER_COUNT=1000
+RECONNECT_DELAY=5
+PREFETCH_COUNT=3000
 
-MAIN_QUEUE_NAME=gimli-tasks
-MAIN_QUEUE_EXCHANGE=gimli-main
-MAIN_QUEUE_ROUTING_KEY=email.send
+MAIN_QUEUE_NAME=gimli.mail
+MAIN_QUEUE_EXCHANGE=gimli.exchange
+MAIN_QUEUE_ROUTING_KEY=mail.send
 MAIN_QUEUE_MAX_RETRIES=5
 
-RETRY_QUEUE_NAME=gimli-retry
-RETRY_QUEUE_EXCHANGE=gimli-retry
-RETRY_QUEUE_DELAY_FACTOR=1.0
+RETRY_QUEUE_NAME=gimli.mail.retry
+RETRY_QUEUE_DELAY_FACTOR=15
+RETRY_QUEUE_EXCHANGE=gimli.retry
 
-DLQ_NAME=gimli-dlq
-DLQ_EXCHANGE=gimli-dlq
-DLQ_ROUTING_KEY=email.dead
-
-WORKER_COUNT=1000
-PREFETCH_COUNT=10000
-RECONNECT_DELAY=5
+DLQ_QUEUE_NAME=gimli.mail.dlq
+DLQ_QUEUE_EXCHANGE=gimli.dlx
+DLQ_QUEUE_ROUTING_KEY=mail.dead
 
 SMTP_HOST=localhost
 SMTP_PORT=1025
-SMTP_USERNAME=
-SMTP_PASSWORD=
+SMTP_USERNAME=testuser
+SMTP_PASSWORD=testpass
 SMTP_ALLOW_TLS=false
-SMTP_POOL_SIZE=50
+SMTP_POOL_SIZE=5
+SMTP_TIMEOUT=3

@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/diode"
 )
 
+// Consumer manages RabbitMQ consumption, mail processing, and automatic reconnection.
 type Consumer struct {
 	conn        *amqp.Connection
 	channel     *amqp.Channel
@@ -28,6 +29,7 @@ type Consumer struct {
 	isReady     atomic.Bool
 }
 
+// NewConsumer connects to RabbitMQ, opens a channel, sets QoS, and initializes the mail service.
 func NewConsumer(cfg config.Config) (*Consumer, error) {
 	conn, err := amqp.Dial(cfg.RabbitMQURL)
 	if err != nil {
@@ -61,6 +63,7 @@ func NewConsumer(cfg config.Config) (*Consumer, error) {
 	return &Consumer{conn: conn, channel: ch, cfg: cfg, mailService: mailSvc, logger: logger, logWriter: logWriter}, nil
 }
 
+// Close shuts down the AMQP channel, connection, mail service, and log writer.
 func (c *Consumer) Close() {
 	c.channel.Close()
 	c.conn.Close()
@@ -68,12 +71,14 @@ func (c *Consumer) Close() {
 	c.logWriter.Close()
 }
 
+// IsReady reports whether the consumer is accepting work, may be useful in future health checks or graceful shutdowns.
 func (c *Consumer) IsReady() bool {
 	return c.isReady.Load()
 }
 
+// Setup declares the main queue, retry queue (with DLX back to main), and DLQ.
 func (c *Consumer) Setup() error {
-	if err := c.declareQueue(c.cfg.MainQueue.BaseQueueSettings); err != nil {
+	if err := c.declareQueue(c.cfg.MainQueue); err != nil {
 		return fmt.Errorf("setup main queue: %w", err)
 	}
 
@@ -98,7 +103,7 @@ func (c *Consumer) declareRetryQueue() error {
 		Exchange:   c.cfg.RetryQueue.Exchange,
 		RoutingKey: c.cfg.MainQueue.RoutingKey,
 	}
-	return c.declare(q, &c.cfg.MainQueue.BaseQueueSettings)
+	return c.declare(q, &c.cfg.MainQueue)
 }
 
 func (c *Consumer) declare(q config.BaseQueueSettings, dlx *config.BaseQueueSettings) error {
@@ -131,6 +136,8 @@ func (c *Consumer) declare(q config.BaseQueueSettings, dlx *config.BaseQueueSett
 	return nil
 }
 
+// Start begins consuming messages from the main queue with the given number of worker goroutines.
+// It also spawns a background connection monitor for automatic reconnection.
 func (c *Consumer) Start(workerCount int) error {
 	deliveries, err := c.channel.Consume(
 		c.cfg.MainQueue.Name, // queue
@@ -253,7 +260,7 @@ func (c *Consumer) handleFailure(m *mail.Mail, msg amqp.Delivery, logger zerolog
 
 	m.RetryCount++
 
-	if m.RetryCount > c.cfg.MainQueue.MaxRetries {
+	if m.RetryCount > c.cfg.MaxRetries {
 		retryableHeaders := amqp.Table{"x-retryable": true}
 		c.publishMsg(c.cfg.DLQ.Exchange, c.cfg.DLQ.RoutingKey, m, "", retryableHeaders)
 		logger.Warn().Int("retry", m.RetryCount).Msg("Dead-lettered")

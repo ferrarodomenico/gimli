@@ -1,6 +1,5 @@
 package main
 
-//GODEBUG=gctrace=1 go run cmd/main/main.go 2> gc_trace.log
 import (
 	"log"
 	"os"

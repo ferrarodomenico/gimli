@@ -7,6 +7,8 @@ import (
 	"strconv"
 )
 
+// LoadConfig reads all configuration from environment variables and returns a populated Config.
+// Missing required variables cause a fatal exit.
 func LoadConfig() Config {
 
 	return Config{
@@ -14,7 +16,8 @@ func LoadConfig() Config {
 		WorkerCount:    loadEnv[int](WORKER_COUNT_ENV),
 		ReconnectDelay: loadEnv[uint8](RECONNECT_DELAY_ENV),
 		PrefetchCount:  loadEnv[int](PREFETCH_COUNT_ENV),
-		MainQueue:      loadMainQueue(),
+		MaxRetries:     loadEnv[int](MAX_RETRIES_ENV),
+		MainQueue:      loadBaseQueue(MAIN_PREFIX),
 		RetryQueue:     loadRetryQueue(),
 		DLQ:            loadBaseQueue(DLQ_PREFIX),
 		SMTP:           loadSMTP(),
@@ -26,13 +29,6 @@ func loadBaseQueue(prefix string) BaseQueueSettings {
 		Name:       loadEnv[string](prefix + QUEUE_NAME_SUFFIX),
 		Exchange:   loadEnv[string](prefix + QUEUE_EXCHANGE_SUFFIX),
 		RoutingKey: loadEnv[string](prefix + QUEUE_ROUTING_KEY_SUFFIX),
-	}
-}
-
-func loadMainQueue() MainQueueSettings {
-	return MainQueueSettings{
-		BaseQueueSettings: loadBaseQueue(MAIN_PREFIX),
-		MaxRetries:        loadEnv[int](MAIN_PREFIX + QUEUE_MAX_RETRIES_SUFFIX),
 	}
 }
 

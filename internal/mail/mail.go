@@ -17,6 +17,7 @@ import (
 	"github.com/ferrarodomenico/gimli/internal/config"
 )
 
+// Mail represents an email message with optional template variables and processing state.
 type Mail struct {
 	From       string
 	To         string
@@ -28,6 +29,7 @@ type Mail struct {
 	RetryCount int
 }
 
+// Service is a singleton SMTP mail service with a connection pool and HTML minifier.
 type Service struct {
 	m    *min.M
 	pool chan *gomail.Client
@@ -39,6 +41,8 @@ var (
 	once     sync.Once
 )
 
+// NewService creates the singleton mail service with a pre-connected SMTP client pool.
+// Panics if any client fails to dial.
 func NewService(cfg config.SMTPConfig) *Service {
 	once.Do(func() {
 		m := min.New()
@@ -85,6 +89,7 @@ func NewService(cfg config.SMTPConfig) *Service {
 	return instance
 }
 
+// Close shuts down all SMTP clients in the pool.
 func (s *Service) Close() {
 	close(s.pool)
 	for client := range s.pool {
@@ -92,6 +97,7 @@ func (s *Service) Close() {
 	}
 }
 
+// Minify compresses the mail's HTML body and sets Minified to true.
 func (s *Service) Minify(mail *Mail) {
 	minified, err := s.m.String("text/html", mail.Body)
 	if err != nil {
@@ -101,6 +107,8 @@ func (s *Service) Minify(mail *Mail) {
 	mail.Minified = true
 }
 
+// Parse interpolates {{key}} placeholders in the mail body with values from Vars.
+// Keys without a matching entry are left unchanged. Sets Parsed to true.
 func (s *Service) Parse(mail *Mail) {
 	html := mail.Body
 	var buf strings.Builder
@@ -144,6 +152,8 @@ func (s *Service) Parse(mail *Mail) {
 	mail.Parsed = true
 }
 
+// Send delivers the mail via SMTP using a pooled connection.
+// Non-temporary errors trigger a redial and single retry.
 func (s *Service) Send(mail *Mail) error {
 	msg := gomail.NewMsg()
 	if err := msg.From(mail.From); err != nil {
@@ -175,6 +185,7 @@ func (s *Service) redial(client *gomail.Client) error {
 	return client.DialWithContext(ctx)
 }
 
+// IsSendErrorTemp reports whether err is a temporary (4xx) SMTP error.
 func (s *Service) IsSendErrorTemp(err error) bool {
 	if err == nil {
 		return false
