@@ -251,7 +251,7 @@ func (c *Consumer) processMail(m *mail.Mail) error {
 }
 
 func (c *Consumer) handleFailure(m *mail.Mail, msg amqp.Delivery, logger zerolog.Logger, err error) {
-	if c.mailService.IsSendErrorTemp(err) {
+	if !c.mailService.IsSendErrorTemp(err) {
 		c.publishMsg(c.cfg.DLQ.Exchange, c.cfg.DLQ.RoutingKey, m, "", amqp.Table{"x-retryable": false})
 		logger.Warn().Msg("Permanent SMTP failure, dead-lettered immediately")
 		_ = msg.Ack(false)
