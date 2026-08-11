@@ -192,7 +192,7 @@ func (s *Service) IsSendErrorTemp(err error) bool {
 	}
 	var sendErr *gomail.SendError
 	if errors.As(err, &sendErr) {
-		return sendErr.IsTemp()
+		return sendErr.IsTemp() || sendErr.Reason == gomail.ErrConnCheck
 	}
 	return false
 }
